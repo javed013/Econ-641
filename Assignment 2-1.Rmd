@@ -1,0 +1,347 @@
+---
+title: "Assignment 2-1"
+subtitle: 
+author: Xinyu Guo, Javed Hossain, Sriramjee Singh
+date: \today
+output: pdf_document
+urlcolor: blue
+---
+
+```{r setup, include=FALSE, echo = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#Load libraries
+library(pacman)
+pacman::p_load(tidyverse)
+pacman::p_load(readr) #To read files faster -  helpful with big data files
+pacman::p_load(readxl) #To read exel files
+suppressMessages(pacman::p_load(xlsx, readxl)) #To read and write excel files
+pacman::p_load(Cairo) #For font compatibility
+pacman::p_load(systemfit)
+p_load(texreg)
+
+#set the working directory - change for it to work on your own computer.
+#setwd("C:/Users/Mr_Gu/OneDrive/SEM2-1/Ag Econ/Econ 641 - Fall 2017/Assignment 2")
+#setwd("C:/Users/Xinyu Guo/OneDrive/SEM2-1/Ag Econ/Econ 641 - Fall 2017/Assignment 2")
+``` 
+
+
+```{r data, include = TRUE, echo = TRUE, message = FALSE, tidy = FALSE}
+#Clear memory
+rm(list = ls())
+
+#Read the data
+dta = read_csv("rice.csv")
+
+#Calculate cost
+dta <-  dta %>% 
+  mutate(COST = AREA*AREAP + LABOR*LABORP + NPKP*NPK + OTHERP*OTHER)
+
+#Normalize with respect to land price
+dta <- dta %>% 
+  mutate(C = COST/AREAP, 
+         W2 = LABORP/AREAP, 
+         W3 = NPKP/AREAP, 
+         W4 = OTHERP/AREAP,
+         Y  =PROD,
+         W2W2=W2*W2,
+         W3W3=W3*W3,
+         W4W4=W4*W4,
+         W2W3=W2*W3,
+         W2W4=W2*W4,
+         W3W4=W3*W4,
+         W2Y=W2*Y,
+         W3Y=W3*Y,
+         W4Y=W4*Y,
+         W2T=W2*YEARDUM,
+         W3T=W3*YEARDUM,
+         W4T=W4*YEARDUM,
+         YY=Y*Y,
+         TT=YEARDUM*YEARDUM
+         ) 
+
+#Create dummy for each farm
+for(t in unique(dta$FMERCODE)) {
+  dta[,paste("farm",t,sep="_")] <- as.numeric(dta$FMERCODE==t)
+}
+
+#Use factors in linear regressions instead of dummies
+dta <- dta %>% 
+  mutate(FMERCODE = as.factor(FMERCODE))
+
+```
+
+###Question 1
+*Provide a summary of the data for the output (rice), and input prices (labor, fertilizer, land, other) and the year variable. Do this in any way you want (tables and/or figures). Discuss.*
+
+```{r}
+
+dta_new <- subset(dta, select=c("YEARDUM", "PROD", "AREA", "LABOR", "NPK", "OTHER"))
+summary(dta_new)
+
+dta_prod <- subset(dta, select=c("YEARDUM", "PROD"))
+plot_prod <- dta_prod %>%
+  group_by(YEARDUM=factor(YEARDUM)) %>%
+  summarise_all(funs(mean)) %>%
+  gather(Var, Val, -YEARDUM)%>%
+  ggplot(., aes(x=Var, y=Val, fill=YEARDUM)) + geom_bar(stat='identity', position='dodge')
+
+print(plot_prod + labs(y="Quantity in Kgs", x="Period") + ggtitle("Average Rice Production over Period"))
+
+
+dta_labor <- subset(dta, select=c("YEARDUM", "LABOR"))
+plot_labor <- dta_labor %>%
+  group_by(YEARDUM=factor(YEARDUM)) %>%
+  summarise_all(funs(mean)) %>%
+  gather(Var, Val, -YEARDUM)%>%
+  ggplot(., aes(x=Var, y=Val, fill=YEARDUM)) + geom_bar(stat='identity', position='dodge')
+
+print(plot_labor + labs(y="Labor in man-days", x="Period") + ggtitle("Average man-days employed over Period"))
+
+
+dta_npk <- subset(dta, select=c("YEARDUM", "NPK"))
+plot_npk <- dta_npk %>%
+  group_by(YEARDUM=factor(YEARDUM)) %>%
+  summarise_all(funs(mean)) %>%
+  gather(Var, Val, -YEARDUM)%>%
+  ggplot(., aes(x=Var, y=Val, fill=YEARDUM)) + geom_bar(stat='identity', position='dodge')
+
+print(plot_npk + labs(y="Quantity of fertilizer in Kgs", x="Period") + ggtitle("Average quantity of fertilizer used over Period"))
+
+
+dta_land <- subset(dta, select=c("YEARDUM", "AREA"))
+plot_land <- dta_land %>%
+  group_by(YEARDUM=factor(YEARDUM)) %>%
+  summarise_all(funs(mean)) %>%
+  gather(Var, Val, -YEARDUM)%>%
+  ggplot(., aes(x=Var, y=Val, fill=YEARDUM)) + geom_bar(stat='identity', position='dodge')
+
+print(plot_land + labs(y="Area planted in Hectares", x="Period") + ggtitle("Average area planted over Period"))
+
+
+dta_other <- subset(dta, select=c("YEARDUM", "OTHER"))
+plot_other <- dta_other %>%
+  group_by(YEARDUM=factor(YEARDUM)) %>%
+  summarise_all(funs(mean)) %>%
+  gather(Var, Val, -YEARDUM)%>%
+  ggplot(., aes(x=Var, y=Val, fill=YEARDUM)) + geom_bar(stat='identity', position='dodge')
+
+print(plot_other + labs(y="Other inputs", x="Period") + ggtitle("Average of other inputs used over Period"))
+
+```
+Discussion:
+
+A bar graph is plotted for all variables in consideration to analyse their behavior of over the period. The data set is panel, having 8 periods. Mean value of the variable in a period is taken to see the trend over the entire period.
+
+Rice production is quite good in 3rd, 6th and 8th period, where as 7th period turns out to be the minimum production period. The mean production of the entire period is in range of 6-8 kgs except the 7th period.
+
+Labor employed in the production is quite stable over the period and in the range of 100-125 man-days. 1st and the 6th period labor employed are higher than the other periods.
+
+Fertilizer used in the production is increasing from 1st to 3rd period, dropped in the 4th period and again rising until 7th period and then dropped in 8th period.
+
+Area under plantation shows a very consistent trend. It is decreasing over the period.
+
+Other inputs were very low in the first 2 periods and after that it picked up.  
+
+
+
+###Question 2
+*Construct a correlation table the output (rice), the prices of inputs (labor, fertilizer, land, other) and the year variable. Discuss.*
+```{r}
+#Construct correlation table 
+cor(dta_new)
+
+```
+
+Discussion:
+
+Year has very low correlation with other variables, which means that there is no major change over the period.
+  
+Production has very high correlation with the input variables. As expected high inputs give high output.
+
+Area under cultivation is also very highly correlated with all variables except Year.
+
+Similarly, Labor, Fertilizer and Other input variables are highly correlated with all variables except Year.
+
+The variables are complementary in nature.
+
+###Question 3
+*Estimate a normalized quadratic cost function for the production of rice, without the input demands. Normalize the cost and the prices using the price of land. Comment on your results.*
+
+```{r single, include=TRUE, echo = TRUE, message = FALSE, results = 'asis', tidy = TRUE}
+
+attach(dta)
+E<- cbind(W2 , W3 , W4 ,Y , YEARDUM)
+
+
+#Regression formula
+eqcost <- as.formula(C ~ (W2 + W3 + W4 + Y + YEARDUM )^2 + W2W2 + W3W3 + W4W4 + TT + YY + FMERCODE)
+
+#Estimate single equation - no restictions
+model_1 <- lm(eqcost, data=dta, singular.ok = TRUE) 
+
+texreg(model_1, caption = "Summary of regression results", 
+       omit.coef = "FMERCODE", caption.above = TRUE, label = "tab.OLS")
+
+
+```
+By using normalization, we impose homogenity condition. From this paticular specification of equition, we also impose symetry constrains. 
+
+Interestingly, from regression result above, the effect of Y alone on cost is negative and significant. However, when we consider the cross term (the interaction effect of Y and W2,W2,W3), the total effect of Y on cost became possitive and intuitively correct. 
+
+###Question 4
+*Estimate a normalized quadratic cost function for the production of rice, simultaneously with the input demands. Normalize the cost and the prices using the price of land. How many constraints are there in the model that you estimate? Comment on your results.*
+
+```{r single_rest, include=TRUE, echo =TRUE, message = FALSE, results = 'asis', tidy = TRUE}
+#attach(dta)
+
+eq_X2  <- as.formula(LABOR ~ E)  
+eq_X3  <- as.formula(NPK ~ E)
+eq_X4  <- as.formula(OTHER ~ E) 
+
+
+k1=length(model_1$coef)
+k2= ncol(E)+1
+Rrestr <- matrix(0,3*k2,(k1+3*k2))
+
+#First 3 constrain beta2 ~ beta4
+
+#beta2
+Rrestr[1,k1+1] <- 1  
+Rrestr[1,2] <- -1
+
+#beta22
+model_1$coefficients[7]
+Rrestr[2,k1+2] <- 1  
+Rrestr[2,7] <- -2   # (-2)* model_1$coefficients[7]+ b22=0
+
+#beta23  
+model_1$coefficients[54]
+Rrestr[3,k1+3] <- 1  
+Rrestr[3,54] <- -1  
+
+#beta24  
+model_1$coefficients[55]
+Rrestr[4,k1+4] <- 1  
+Rrestr[4,55] <- -1  
+
+#gama21 
+model_1$coefficients[56]
+Rrestr[5,k1+5] <- 1  
+Rrestr[5,56] <- -1  
+
+#rho2T
+model_1$coefficients[57]
+Rrestr[6,k1+6] <- 1  
+Rrestr[6,57] <- -1  
+
+
+#beta3
+model_1$coefficients[3]
+Rrestr[7,k1+7] <- 1  
+Rrestr[7,3] <- -1
+
+#beta32
+model_1$coefficients[54]
+Rrestr[8,k1+8] <- 1  
+Rrestr[8,54] <- -1    
+
+#beta33
+model_1$coefficients[8]
+Rrestr[9,k1+9] <- 1  
+Rrestr[9,8] <- -2  
+
+#beta34
+model_1$coefficients[58]
+Rrestr[10,k1+10] <- 1  
+Rrestr[10,58] <- -1    
+
+#gama31 
+model_1$coefficients[59]
+Rrestr[11,k1+11] <- 1  
+Rrestr[11,59] <- -1  
+
+#rho2T
+model_1$coefficients[60]
+Rrestr[12,k1+12] <- 1  
+Rrestr[12,60] <- -1  
+
+
+
+#beta4
+model_1$coefficients[4]
+Rrestr[2*k2+1,k1+2*k2+1] <- 1  
+Rrestr[2*k2+1,4] <- -1
+
+#beta42
+model_1$coefficients[55]
+Rrestr[14,k1+14] <- 1  
+Rrestr[14,55] <- -1    
+
+#beta43
+model_1$coefficients[58]
+Rrestr[15,k1+15] <- 1  
+Rrestr[15,58] <- -1  
+
+#beta44
+model_1$coefficients[9]
+Rrestr[16,k1+16] <- 1  
+Rrestr[16,9] <- -2    
+
+#gama41 
+model_1$coefficients[61]
+Rrestr[17,k1+17] <- 1  
+Rrestr[17,61] <- -1  
+
+#rho2T
+model_1$coefficients[62]
+Rrestr[18,k1+18] <- 1  
+Rrestr[18,62] <- -1  
+
+
+qrestr <- seq(0,0,length.out=nrow(Rrestr))
+
+#Estimate system of equations
+model2 <- list( eq1 = eqcost, eq2 = eq_X2 , eq3 = eq_X3, eq4 = eq_X4)#
+model_2 <- systemfit(model2, method = "SUR", data = dta, restrict.matrix = Rrestr, restrict.rhs = qrestr, maxit = 5000)#
+
+texreg(model_2, omit.coef = "FMERCODE", caption = "System of cost function", caption.above = TRUE, label = "tab.system")
+ 
+
+
+```
+
+For this question alone we impose 6\*3=18 constrains. For Question 3 we impose symetry constrains by specify model in a paticulary way.(5*5-5=20 in total)
+
+Beacuse we add more information by simultaneously estimating the input demands, the precision of estimates shall increase.
+
+
+
+###Question 5
+*Verify whether the cost function in question 4 is concave with respect to the input prices. Discuss.*
+
+```{r}
+
+#Extract Hessian matrix of Cost Function
+B <- matrix( ,ncol = 3,nrow =  3)
+for(i in 1:3){
+  for(j in 1:3){
+    element_ij <- paste("eq",i+1,"_","EW",j+1,sep = "")
+    B[i,j] <- model_2$coefficients[element_ij]
+  }
+}
+
+#Calculate pricipal minor
+B1 <- B[1,1]
+B1
+B2 <- B[c(1,2),c(1,2)]
+det(B2)
+B3 <- B
+det(B)
+
+```
+
+Since the sign of principal minor does not alter, the cost function is not concave in W. (The reason might be that, during this time period, the production function has changed, like productivity shock or technology improvement. Thus the estimated cost function is no longer the estimation of same underlying input-output relation.)
+
+
+
